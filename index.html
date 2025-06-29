@@ -22,7 +22,7 @@
   <script>
     const SUPABASE_URL = "https://yglfjstrkrevufhgqdwl.supabase.co";
     const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlnbGZqc3Rya3JldnVmaGdxZHdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTExNTkyNzUsImV4cCI6MjA2NjczNTI3NX0.vPSeHvWpjkWHXbyYUIHeLxPgYVSJEcQylgyi0zZBQio";
-    const BUCKET_NAME = "files"; // You must create this bucket in Supabase Storage
+    const BUCKET_NAME = "files"; // Make sure this bucket exists and is public
 
     const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -41,10 +41,12 @@
 
       if (uploadError) return alert("Upload failed: " + uploadError.message);
 
-      const { data: urlData } = supabase
+      const { data: urlData, error: urlError } = await supabase
         .storage
         .from(BUCKET_NAME)
         .getPublicUrl(path);
+
+      if (urlError || !urlData) return alert("Failed to get public URL.");
 
       const fileUrl = urlData.publicUrl;
 
