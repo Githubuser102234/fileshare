@@ -1,28 +1,93 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Supabase File Sharing via Hash</title>
+  <title>File Sharing via Supabase</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
   <style>
-    body { font-family: Arial; padding: 20px; max-width: 600px; margin: auto; }
-    #linkBox { background: #eef; padding: 10px; margin-top: 10px; word-break: break-word; }
-    #preview img, video { max-width: 100%; margin-top: 10px; }
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+      max-width: 600px;
+      margin: auto;
+      background: #f9f9f9;
+    }
+
+    h2 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    #container {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+
+    input[type="file"] {
+      width: 100%;
+      margin-bottom: 15px;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #45a049;
+    }
+
+    #linkBox {
+      margin-top: 20px;
+      background: #e7f3ff;
+      padding: 10px;
+      border-radius: 8px;
+      display: none;
+      word-wrap: break-word;
+    }
+
+    #preview img, #preview video {
+      max-width: 100%;
+      margin-top: 20px;
+      border-radius: 10px;
+    }
+
+    #preview a {
+      display: block;
+      margin-top: 20px;
+      text-align: center;
+      background: #ddd;
+      padding: 10px;
+      border-radius: 8px;
+      text-decoration: none;
+      color: #000;
+    }
   </style>
 </head>
 <body>
-  <h2>📁 Supabase File Sharing via # Links</h2>
+  <div id="container">
+    <h2>📁 Share Any File via Link</h2>
 
-  <input type="file" id="fileInput">
-  <button onclick="uploadFile()">Upload & Share</button>
+    <input type="file" id="fileInput">
+    <button onclick="uploadFile()">Upload & Share</button>
 
-  <div id="linkBox" style="display:none;"></div>
-  <div id="preview"></div>
+    <div id="linkBox"></div>
+    <div id="preview"></div>
+  </div>
 
   <script>
     const SUPABASE_URL = "https://yglfjstrkrevufhgqdwl.supabase.co";
     const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlnbGZqc3Rya3JldnVmaGdxZHdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTExNTkyNzUsImV4cCI6MjA2NjczNTI3NX0.vPSeHvWpjkWHXbyYUIHeLxPgYVSJEcQylgyi0zZBQio";
-    const BUCKET_NAME = "files"; // Make sure this bucket exists and is public
+    const BUCKET_NAME = "files";
 
     const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -34,6 +99,7 @@
       const id = Math.random().toString(36).substring(2, 8);
       const path = `${id}-${file.name}`;
 
+      // Upload to Supabase Storage
       const { error: uploadError } = await supabase
         .storage
         .from(BUCKET_NAME)
@@ -46,19 +112,22 @@
         .from(BUCKET_NAME)
         .getPublicUrl(path);
 
-      if (urlError || !urlData) return alert("Failed to get public URL.");
+      if (urlError || !urlData) return alert("Failed to get public URL");
 
       const fileUrl = urlData.publicUrl;
 
+      // Save link to database
       const { error: insertError } = await supabase
         .from('shared_files')
         .insert([{ id, url: fileUrl }]);
 
       if (insertError) return alert("Database insert failed: " + insertError.message);
 
+      // Show the share link
       const shareLink = `${location.origin}${location.pathname}#${id}`;
-      document.getElementById('linkBox').innerText = "Share this link: " + shareLink;
+      document.getElementById('linkBox').innerHTML = `<strong>Share this link:</strong><br><a href="${shareLink}">${shareLink}</a>`;
       document.getElementById('linkBox').style.display = 'block';
+      document.getElementById('preview').innerHTML = ''; // clear any previews
     }
 
     async function fetchFileByHash() {
@@ -71,28 +140,26 @@
         .eq('id', hash)
         .single();
 
+      const preview = document.getElementById('preview');
+
       if (error || !data) {
-        document.getElementById('preview').innerText = "No file found for this link.";
+        preview.innerHTML = "<p style='color:red'>File not found.</p>";
         return;
       }
 
-      displayFile(data.url);
-    }
-
-    function displayFile(url) {
+      const url = data.url;
       const ext = url.split('.').pop().toLowerCase();
-      const preview = document.getElementById('preview');
-      preview.innerHTML = "";
 
       if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
         preview.innerHTML = `<img src="${url}" alt="Image">`;
       } else if (['mp4', 'webm'].includes(ext)) {
         preview.innerHTML = `<video controls src="${url}"></video>`;
       } else {
-        preview.innerHTML = `<a href="${url}" target="_blank" download>Download File</a>`;
+        preview.innerHTML = `<a href="${url}" target="_blank" download>📄 Download File</a>`;
       }
     }
 
+    // Load file preview on page load if there's a #id
     window.addEventListener('load', fetchFileByHash);
   </script>
 </body>
