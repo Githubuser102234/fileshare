@@ -51,6 +51,32 @@
       font-size: 14px;
       color: #666;
     }
+    /* New styles for progress bar and copy button */
+    #progressContainer {
+      display: none;
+      margin-top: 10px;
+    }
+    #progressBar {
+      width: 100%;
+      background: #ddd;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    #progressBar div {
+      width: 0%;
+      height: 10px;
+      background: #28a745;
+    }
+    #uploadPercentage {
+      text-align: center;
+      font-size: 14px;
+      margin-top: 5px;
+    }
+    #copyBtn {
+      background: #007bff;
+      margin-top: 10px;
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -63,17 +89,25 @@
   </select>
   <button onclick="uploadFile()">Upload & Share</button>
 
+  <div id="progressContainer">
+    <div id="progressBar"><div></div></div>
+    <div id="uploadPercentage">0%</div>
+  </div>
+
   <div id="linkBox" style="display:none"></div>
+  <button id="copyBtn" onclick="copyLink()">Copy Link</button>
   <button id="deleteBtn" style="display:none" onclick="deleteFile()">Delete File</button>
   <div id="preview"></div>
 
   <script>
     const SUPABASE_URL = "https://yglfjstrkrevufhgqdwl.supabase.co";
-    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlnbGZqc3Rya3JldnVmaGdxZHdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTExNTkyNzUsImV4cCI6MjA2NjczNTI3NX0.vPSeHvWpjkWHXbyYUIHeLxPgYVSJEcQylgyi0zZBQio";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlnbGZqc3Rya3RldnVmaGdxZHdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTExNTkyNzUsImV4cCI6MjA2NjczNTI3NX0.vPSeHvWpjkWHXbyYUIHeLxPgYVSJEcQylgyi0zZBQio";
     const BUCKET = "files";
 
     const { createClient } = supabase;
     const client = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let currentLink = "";
 
     async function uploadFile() {
       const file = document.getElementById('fileInput').files[0];
@@ -83,8 +117,25 @@
       const id = Math.random().toString(36).substring(2, 8);
       const filePath = `${id}-${file.name}`;
 
-      const { error: uploadError } = await client.storage.from(BUCKET).upload(filePath, file);
-      if (uploadError) return alert("Upload failed: " + uploadError.message);
+      // show progress bar
+      document.getElementById('progressContainer').style.display = 'block';
+      document.getElementById('progressBar').firstElementChild.style.width = '0%';
+      document.getElementById('uploadPercentage').innerText = '0%';
+
+      const { error: uploadError } = await client.storage
+        .from(BUCKET)
+        .upload(filePath, file, {
+          // supabase-js v2 supports onUploadProgress
+          onUploadProgress: (evt) => {
+            const pct = Math.round((evt.loaded / evt.total) * 100);
+            document.getElementById('progressBar').firstElementChild.style.width = pct + '%';
+            document.getElementById('uploadPercentage').innerText = pct + '%';
+          }
+        });
+
+      if (uploadError) {
+        return alert("Upload failed: " + uploadError.message);
+      }
 
       const { data: publicUrlData } = client.storage.from(BUCKET).getPublicUrl(filePath);
       const publicUrl = publicUrlData.publicUrl;
@@ -95,10 +146,19 @@
       if (dbError) return alert("DB insert failed: " + dbError.message);
 
       localStorage.setItem("uploaded_" + id, filePath);
-      const link = `${location.origin}${location.pathname}#${id}`;
-      document.getElementById('linkBox').innerHTML = `<strong>Shareable link:</strong><br><a href="${link}">${link}</a>`;
+      currentLink = `${location.origin}${location.pathname}#${id}`;
+
+      document.getElementById('linkBox').innerHTML = `<strong>Shareable link:</strong><br><a href="${currentLink}">${currentLink}</a>`;
       document.getElementById('linkBox').style.display = 'block';
+      document.getElementById('copyBtn').style.display = 'block';
       document.getElementById('deleteBtn').style.display = 'block';
+    }
+
+    function copyLink() {
+      if (!currentLink) return;
+      navigator.clipboard.writeText(currentLink)
+        .then(() => alert("Link copied to clipboard!"))
+        .catch(() => alert("Failed to copy link."));
     }
 
     async function showFileFromHash() {
@@ -142,7 +202,26 @@
       preview.innerHTML = `
         ${contentHtml}
         <p class="expiration">Expires at: <strong>${expiresStr}</strong></p>
+        <p class="expiration" id="countdown"></p>
       `;
+
+      // start countdown
+      function updateCountdown() {
+        const now = new Date();
+        const diff = expires - now;
+        if (diff <= 0) {
+          document.getElementById('countdown').innerText = 'Expired';
+          clearInterval(intervalId);
+          return;
+        }
+        const d = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const h = Math.floor((diff / (1000 * 60 * 60)) % 24);
+        const m = Math.floor((diff / (1000 * 60)) % 60);
+        const s = Math.floor((diff / 1000) % 60);
+        document.getElementById('countdown').innerText = `Time left: ${d}d ${h}h ${m}m ${s}s`;
+      }
+      updateCountdown();
+      const intervalId = setInterval(updateCountdown, 1000);
 
       // Show delete button if uploaded in this session
       const storedPath = localStorage.getItem("uploaded_" + id);
