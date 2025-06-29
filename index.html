@@ -122,36 +122,45 @@
       document.getElementById('progressBar').firstElementChild.style.width = '0%';
       document.getElementById('uploadPercentage').innerText = '0%';
 
-      const { error: uploadError } = await client.storage
-        .from(BUCKET)
-        .upload(filePath, file, {
-          // supabase-js v2 supports onUploadProgress
-          onUploadProgress: (evt) => {
-            const pct = Math.round((evt.loaded / evt.total) * 100);
-            document.getElementById('progressBar').firstElementChild.style.width = pct + '%';
-            document.getElementById('uploadPercentage').innerText = pct + '%';
-          }
-        });
+      // build FormData
+      const form = new FormData();
+      form.append('file', file);
+      form.append('path', filePath);
 
-      if (uploadError) {
-        return alert("Upload failed: " + uploadError.message);
-      }
+      // direct REST upload via XHR
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `${SUPABASE_URL}/storage/v1/object/${BUCKET}`, true);
+      xhr.setRequestHeader('Authorization', `Bearer ${SUPABASE_KEY}`);
 
-      const { data: publicUrlData } = client.storage.from(BUCKET).getPublicUrl(filePath);
-      const publicUrl = publicUrlData.publicUrl;
+      xhr.upload.onprogress = (evt) => {
+        if (!evt.lengthComputable) return;
+        const pct = Math.round((evt.loaded / evt.total) * 100);
+        document.getElementById('progressBar').firstElementChild.style.width = pct + '%';
+        document.getElementById('uploadPercentage').innerText = pct + '%';
+      };
 
-      const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+      xhr.onload = async () => {
+        if (xhr.status !== 200 && xhr.status !== 204) {
+          return alert("Upload failed: " + xhr.responseText);
+        }
 
-      const { error: dbError } = await client.from("shared_files").insert([{ id, url: publicUrl, expires_at: expiresAt }]);
-      if (dbError) return alert("DB insert failed: " + dbError.message);
+        // now record in DB & show link
+        const publicUrl = client.storage.from(BUCKET).getPublicUrl(filePath).data.publicUrl;
+        const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+        const { error: dbError } = await client.from("shared_files")
+          .insert([{ id, url: publicUrl, expires_at: expiresAt }]);
+        if (dbError) return alert("DB insert failed: " + dbError.message);
 
-      localStorage.setItem("uploaded_" + id, filePath);
-      currentLink = `${location.origin}${location.pathname}#${id}`;
+        localStorage.setItem("uploaded_" + id, filePath);
+        currentLink = `${location.origin}${location.pathname}#${id}`;
+        document.getElementById('linkBox').innerHTML = `<strong>Shareable link:</strong><br><a href="${currentLink}">${currentLink}</a>`;
+        document.getElementById('linkBox').style.display = 'block';
+        document.getElementById('copyBtn').style.display = 'block';
+        document.getElementById('deleteBtn').style.display = 'block';
+      };
 
-      document.getElementById('linkBox').innerHTML = `<strong>Shareable link:</strong><br><a href="${currentLink}">${currentLink}</a>`;
-      document.getElementById('linkBox').style.display = 'block';
-      document.getElementById('copyBtn').style.display = 'block';
-      document.getElementById('deleteBtn').style.display = 'block';
+      xhr.onerror = () => alert("Upload failed due to a network error.");
+      xhr.send(form);
     }
 
     function copyLink() {
@@ -165,7 +174,8 @@
       const id = location.hash.slice(1);
       if (!id) return;
 
-      const { data, error } = await client.from('shared_files').select('url, expires_at').eq('id', id).single();
+      const { data, error } = await client.from('shared_files')
+        .select('url, expires_at').eq('id', id).single();
       const preview = document.getElementById('preview');
 
       if (error || !data) {
@@ -189,11 +199,10 @@
 
       const url = data.url;
       const ext = url.split('.').pop().toLowerCase();
-
       let contentHtml = "";
-      if (["png", "jpg", "jpeg", "gif", "webp"].includes(ext)) {
+      if (["png","jpg","jpeg","gif","webp"].includes(ext)) {
         contentHtml = `<img src="${url}" alt="Image">`;
-      } else if (["mp4", "webm"].includes(ext)) {
+      } else if (["mp4","webm"].includes(ext)) {
         contentHtml = `<video controls src="${url}"></video>`;
       } else {
         contentHtml = `<a href="${url}" download>📄 Download File</a>`;
@@ -214,18 +223,17 @@
           clearInterval(intervalId);
           return;
         }
-        const d = Math.floor(diff / (1000 * 60 * 60 * 24));
-        const h = Math.floor((diff / (1000 * 60 * 60)) % 24);
-        const m = Math.floor((diff / (1000 * 60)) % 60);
-        const s = Math.floor((diff / 1000) % 60);
+        const d = Math.floor(diff / (1000*60*60*24));
+        const h = Math.floor((diff/(1000*60*60)) % 24);
+        const m = Math.floor((diff/(1000*60)) % 60);
+        const s = Math.floor((diff/1000) % 60);
         document.getElementById('countdown').innerText = `Time left: ${d}d ${h}h ${m}m ${s}s`;
       }
       updateCountdown();
       const intervalId = setInterval(updateCountdown, 1000);
 
       // Show delete button if uploaded in this session
-      const storedPath = localStorage.getItem("uploaded_" + id);
-      if (storedPath) {
+      if (localStorage.getItem("uploaded_" + id)) {
         document.getElementById('deleteBtn').style.display = 'block';
       }
     }
