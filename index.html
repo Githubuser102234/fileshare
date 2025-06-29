@@ -51,12 +51,9 @@
       font-size: 14px;
       color: #666;
     }
-    /* NEW: countdown styling */
-    #preview p.countdown {
-      margin-top: 5px;
-      font-size: 14px;
-      font-weight: bold;
-      color: #333;
+    #countdown {
+      font-size: 13px;
+      color: #999;
     }
   </style>
 </head>
@@ -76,10 +73,10 @@
 
   <script>
     const SUPABASE_URL = "https://yglfjstrkrevufhgqdwl.supabase.co";
-    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlnbGZqc3Rya3RydWZoaHFxZHdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTExNTkyNzUsImV4cCI6MjA2NjczNTI3NX0.vPSeHvWpjkWHXbyYUIHeLxPgYVSJEcQylgyi0zZBQio";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlnbGZqc3Rya3JldnVmaGdxZHdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTExNTkyNzUsImV4cCI6MjA2NjczNTI3NX0.vPSeHvWpjkWHXbyYUIHeLxPgYVSJEcQylgyi0zZBQio";
     const BUCKET = "files";
 
-    const { createClient } = supabase;
+    const createClient = supabase.createClient;
     const client = createClient(SUPABASE_URL, SUPABASE_KEY);
 
     async function uploadFile() {
@@ -146,41 +143,39 @@
         contentHtml = `<a href="${url}" download>📄 Download File</a>`;
       }
 
-      // Insert expiration + countdown placeholder
       preview.innerHTML = `
         ${contentHtml}
-        <p class="expiration">Expires at: <strong>${expiresStr}</strong></p>
-        <p class="countdown" id="countdown"></p>
+        <p class="expiration">Expires at: <strong>${expiresStr}</strong><br><span id="countdown"></span></p>
       `;
 
-      // Start the countdown
       startCountdown(expires);
 
-      // Show delete button if uploaded in this session
       const storedPath = localStorage.getItem("uploaded_" + id);
       if (storedPath) {
         document.getElementById('deleteBtn').style.display = 'block';
       }
     }
 
-    function startCountdown(endTime) {
-      const cd = document.getElementById('countdown');
-      function update() {
-        const now = new Date();
-        const diff = endTime - now;
-        if (diff <= 0) {
-          cd.textContent = "Expired";
-          clearInterval(interval);
+    function startCountdown(expirationDate) {
+      function updateCountdown() {
+        const now = new Date().getTime();
+        const distance = expirationDate.getTime() - now;
+
+        if (distance < 0) {
+          document.getElementById("countdown").innerHTML = "Expired";
           return;
         }
-        const days = Math.floor(diff / (1000*60*60*24));
-        const hrs  = Math.floor((diff % (1000*60*60*24)) / (1000*60*60));
-        const mins = Math.floor((diff % (1000*60*60)) / (1000*60));
-        const secs = Math.floor((diff % (1000*60)) / 1000);
-        cd.textContent = `Time left: ${days}d ${hrs}h ${mins}m ${secs}s`;
+
+        const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+        document.getElementById("countdown").innerHTML = `⏳ ${days}d ${hours}h ${minutes}m ${seconds}s`;
       }
-      update();
-      const interval = setInterval(update, 1000);
+
+      updateCountdown();
+      setInterval(updateCountdown, 1000);
     }
 
     async function deleteFile() {
