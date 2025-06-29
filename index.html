@@ -20,9 +20,9 @@
   <div id="preview"></div>
 
   <script>
-    const SUPABASE_URL = "https://your-project-id.supabase.co"; // ← Replace with your project
-    const SUPABASE_KEY = "your-anon-key"; // ← Replace with your anon/public key
-    const BUCKET_NAME = "files"; // ← Your bucket name
+    const SUPABASE_URL = "https://yglfjstrkrevufhgqdwl.supabase.co";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlnbGZqc3Rya3JldnVmaGdxZHdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTExNTkyNzUsImV4cCI6MjA2NjczNTI3NX0.vPSeHvWpjkWHXbyYUIHeLxPgYVSJEcQylgyi0zZBQio";
+    const BUCKET_NAME = "files"; // You must create this bucket in Supabase Storage
 
     const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -34,7 +34,8 @@
       const id = Math.random().toString(36).substring(2, 8);
       const path = `${id}-${file.name}`;
 
-      const { data, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase
+        .storage
         .from(BUCKET_NAME)
         .upload(path, file);
 
