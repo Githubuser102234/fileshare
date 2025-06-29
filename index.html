@@ -13,7 +13,7 @@
       margin: auto;
     }
     h2 { text-align: center; }
-    input, button {
+    input, select, button {
       width: 100%;
       padding: 12px;
       margin-top: 10px;
@@ -37,14 +37,24 @@
       margin-top: 15px;
       border-radius: 8px;
     }
+    #deleteBtn {
+      background: #dc3545;
+      margin-top: 10px;
+    }
   </style>
 </head>
 <body>
   <h2>📁 Upload & Share</h2>
   <input type="file" id="fileInput">
+  <select id="expiration">
+    <option value="1">Expires in 1 day</option>
+    <option value="3">Expires in 3 days</option>
+    <option value="7">Expires in 7 days</option>
+  </select>
   <button onclick="uploadFile()">Upload & Share</button>
 
   <div id="linkBox" style="display:none"></div>
+  <button id="deleteBtn" style="display:none" onclick="deleteFile()">Delete File</button>
   <div id="preview"></div>
 
   <script>
@@ -57,60 +67,35 @@
 
     async function uploadFile() {
       const file = document.getElementById('fileInput').files[0];
+      const days = parseInt(document.getElementById('expiration').value);
       if (!file) return alert("Please choose a file");
 
       const id = Math.random().toString(36).substring(2, 8);
       const filePath = `${id}-${file.name}`;
 
-      console.log("Uploading:", filePath);
+      const { error: uploadError } = await client.storage.from(BUCKET).upload(filePath, file);
+      if (uploadError) return alert("Upload failed: " + uploadError.message);
 
-      const { error: uploadError } = await client
-        .storage
-        .from(BUCKET)
-        .upload(filePath, file);
-
-      if (uploadError) {
-        console.error("Upload error:", uploadError);
-        return alert("Upload failed: " + uploadError.message);
-      }
-
-      const { data: publicUrlData, error: urlError } = client
-        .storage
-        .from(BUCKET)
-        .getPublicUrl(filePath);
-
+      const { data: publicUrlData } = client.storage.from(BUCKET).getPublicUrl(filePath);
       const publicUrl = publicUrlData.publicUrl;
-      console.log("Public URL:", publicUrl);
 
-      if (!publicUrl || urlError) {
-        console.error("Public URL error:", urlError);
-        return alert("Could not get public URL.");
-      }
+      const expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
 
-      const { error: insertError } = await client
-        .from("shared_files")
-        .insert([{ id, url: publicUrl }]);
+      const { error: dbError } = await client.from("shared_files").insert([{ id, url: publicUrl, expires_at: expiresAt }]);
+      if (dbError) return alert("DB insert failed: " + dbError.message);
 
-      if (insertError) {
-        console.error("DB insert error:", insertError);
-        return alert("DB error: " + insertError.message);
-      }
-
+      localStorage.setItem("uploaded_" + id, filePath);
       const link = `${location.origin}${location.pathname}#${id}`;
       document.getElementById('linkBox').innerHTML = `<strong>Shareable link:</strong><br><a href="${link}">${link}</a>`;
       document.getElementById('linkBox').style.display = 'block';
+      document.getElementById('deleteBtn').style.display = 'block';
     }
 
     async function showFileFromHash() {
       const id = location.hash.slice(1);
       if (!id) return;
 
-      const { data, error } = await client
-        .from('shared_files')
-        .select('url')
-        .eq('id', id)
-        .single();
-
+      const { data, error } = await client.from('shared_files').select('url, expires_at').eq('id', id).single();
       const preview = document.getElementById('preview');
 
       if (error || !data) {
@@ -118,15 +103,40 @@
         return;
       }
 
+      const now = new Date();
+      const expires = new Date(data.expires_at);
+      if (now > expires) {
+        preview.innerHTML = "<p style='color:red'>This file has expired.</p>";
+        return;
+      }
+
       const url = data.url;
       const ext = url.split('.').pop().toLowerCase();
-
       if (["png", "jpg", "jpeg", "gif", "webp"].includes(ext)) {
         preview.innerHTML = `<img src="${url}" alt="Image">`;
       } else if (["mp4", "webm"].includes(ext)) {
         preview.innerHTML = `<video controls src="${url}"></video>`;
       } else {
         preview.innerHTML = `<a href="${url}" download>📄 Download File</a>`;
+      }
+
+      // Show delete button if uploaded in this session
+      const storedPath = localStorage.getItem("uploaded_" + id);
+      if (storedPath) {
+        document.getElementById('deleteBtn').style.display = 'block';
+      }
+    }
+
+    async function deleteFile() {
+      const id = location.hash.slice(1);
+      const path = localStorage.getItem("uploaded_" + id);
+      if (!path) return alert("You can't delete this file.");
+
+      if (confirm("Are you sure you want to delete this file?")) {
+        await client.storage.from(BUCKET).remove([path]);
+        await client.from("shared_files").delete().eq("id", id);
+        alert("Deleted!");
+        location.href = location.pathname;
       }
     }
 
