@@ -40,6 +40,16 @@
     #deleteBtn {
       background: #dc3545;
       margin-top: 10px;
+      color: white;
+      border: none;
+      padding: 12px;
+      cursor: pointer;
+      width: 100%;
+    }
+    #preview p.expiration {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #666;
     }
   </style>
 </head>
@@ -110,15 +120,29 @@
         return;
       }
 
+      const options = { 
+        year: 'numeric', month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        timeZoneName: 'short'
+      };
+      const expiresStr = expires.toLocaleString(undefined, options);
+
       const url = data.url;
       const ext = url.split('.').pop().toLowerCase();
+
+      let contentHtml = "";
       if (["png", "jpg", "jpeg", "gif", "webp"].includes(ext)) {
-        preview.innerHTML = `<img src="${url}" alt="Image">`;
+        contentHtml = `<img src="${url}" alt="Image">`;
       } else if (["mp4", "webm"].includes(ext)) {
-        preview.innerHTML = `<video controls src="${url}"></video>`;
+        contentHtml = `<video controls src="${url}"></video>`;
       } else {
-        preview.innerHTML = `<a href="${url}" download>📄 Download File</a>`;
+        contentHtml = `<a href="${url}" download>📄 Download File</a>`;
       }
+
+      preview.innerHTML = `
+        ${contentHtml}
+        <p class="expiration">Expires at: <strong>${expiresStr}</strong></p>
+      `;
 
       // Show delete button if uploaded in this session
       const storedPath = localStorage.getItem("uploaded_" + id);
