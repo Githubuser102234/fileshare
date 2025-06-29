@@ -1,143 +1,112 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <title>File Sharing via Supabase</title>
+  <title>File Share</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
   <style>
     body {
-      font-family: sans-serif;
+      font-family: Arial, sans-serif;
       padding: 20px;
+      background: #f5f5f5;
       max-width: 600px;
       margin: auto;
-      background: #f9f9f9;
     }
-
-    h2 {
-      text-align: center;
-      margin-bottom: 20px;
-    }
-
-    #container {
-      background: white;
-      padding: 20px;
-      border-radius: 10px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    }
-
-    input[type="file"] {
-      width: 100%;
-      margin-bottom: 15px;
-    }
-
-    button {
+    h2 { text-align: center; }
+    input, button {
       width: 100%;
       padding: 12px;
-      background: #4CAF50;
+      margin-top: 10px;
+      font-size: 16px;
+    }
+    button {
+      background: #28a745;
       color: white;
       border: none;
-      border-radius: 8px;
-      font-size: 16px;
       cursor: pointer;
     }
-
-    button:hover {
-      background: #45a049;
-    }
-
     #linkBox {
       margin-top: 20px;
-      background: #e7f3ff;
+      background: #e1f5fe;
       padding: 10px;
-      border-radius: 8px;
-      display: none;
-      word-wrap: break-word;
+      border-radius: 6px;
+      word-break: break-word;
     }
-
     #preview img, #preview video {
       max-width: 100%;
-      margin-top: 20px;
-      border-radius: 10px;
-    }
-
-    #preview a {
-      display: block;
-      margin-top: 20px;
-      text-align: center;
-      background: #ddd;
-      padding: 10px;
+      margin-top: 15px;
       border-radius: 8px;
-      text-decoration: none;
-      color: #000;
     }
   </style>
 </head>
 <body>
-  <div id="container">
-    <h2>📁 Share Any File via Link</h2>
+  <h2>📁 Upload & Share</h2>
+  <input type="file" id="fileInput">
+  <button onclick="uploadFile()">Upload & Share</button>
 
-    <input type="file" id="fileInput">
-    <button onclick="uploadFile()">Upload & Share</button>
-
-    <div id="linkBox"></div>
-    <div id="preview"></div>
-  </div>
+  <div id="linkBox" style="display:none"></div>
+  <div id="preview"></div>
 
   <script>
     const SUPABASE_URL = "https://yglfjstrkrevufhgqdwl.supabase.co";
     const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlnbGZqc3Rya3JldnVmaGdxZHdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTExNTkyNzUsImV4cCI6MjA2NjczNTI3NX0.vPSeHvWpjkWHXbyYUIHeLxPgYVSJEcQylgyi0zZBQio";
-    const BUCKET_NAME = "files";
-
+    const BUCKET = "files";
     const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     async function uploadFile() {
-      const fileInput = document.getElementById('fileInput');
-      const file = fileInput.files[0];
-      if (!file) return alert("Please select a file");
+      const file = document.getElementById('fileInput').files[0];
+      if (!file) return alert("Please choose a file");
 
       const id = Math.random().toString(36).substring(2, 8);
-      const path = `${id}-${file.name}`;
+      const filePath = `${id}-${file.name}`;
 
-      // Upload to Supabase Storage
+      console.log("Uploading:", filePath);
+
       const { error: uploadError } = await supabase
         .storage
-        .from(BUCKET_NAME)
-        .upload(path, file);
+        .from(BUCKET)
+        .upload(filePath, file);
 
-      if (uploadError) return alert("Upload failed: " + uploadError.message);
+      if (uploadError) {
+        console.error("Upload error:", uploadError);
+        return alert("Upload failed: " + uploadError.message);
+      }
 
-      const { data: urlData, error: urlError } = await supabase
+      const { data: publicUrlData, error: urlError } = supabase
         .storage
-        .from(BUCKET_NAME)
-        .getPublicUrl(path);
+        .from(BUCKET)
+        .getPublicUrl(filePath);
 
-      if (urlError || !urlData) return alert("Failed to get public URL");
+      const publicUrl = publicUrlData.publicUrl;
+      console.log("Public URL:", publicUrl);
 
-      const fileUrl = urlData.publicUrl;
+      if (!publicUrl || urlError) {
+        console.error("Public URL error:", urlError);
+        return alert("Could not get public URL.");
+      }
 
-      // Save link to database
       const { error: insertError } = await supabase
-        .from('shared_files')
-        .insert([{ id, url: fileUrl }]);
+        .from("shared_files")
+        .insert([{ id, url: publicUrl }]);
 
-      if (insertError) return alert("Database insert failed: " + insertError.message);
+      if (insertError) {
+        console.error("DB insert error:", insertError);
+        return alert("DB error: " + insertError.message);
+      }
 
-      // Show the share link
-      const shareLink = `${location.origin}${location.pathname}#${id}`;
-      document.getElementById('linkBox').innerHTML = `<strong>Share this link:</strong><br><a href="${shareLink}">${shareLink}</a>`;
+      const link = `${location.origin}${location.pathname}#${id}`;
+      document.getElementById('linkBox').innerHTML = `<strong>Shareable link:</strong><br><a href="${link}">${link}</a>`;
       document.getElementById('linkBox').style.display = 'block';
-      document.getElementById('preview').innerHTML = ''; // clear any previews
     }
 
-    async function fetchFileByHash() {
-      const hash = location.hash.slice(1);
-      if (!hash) return;
+    async function showFileFromHash() {
+      const id = location.hash.slice(1);
+      if (!id) return;
 
       const { data, error } = await supabase
         .from('shared_files')
         .select('url')
-        .eq('id', hash)
+        .eq('id', id)
         .single();
 
       const preview = document.getElementById('preview');
@@ -150,17 +119,16 @@
       const url = data.url;
       const ext = url.split('.').pop().toLowerCase();
 
-      if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
+      if (["png", "jpg", "jpeg", "gif", "webp"].includes(ext)) {
         preview.innerHTML = `<img src="${url}" alt="Image">`;
-      } else if (['mp4', 'webm'].includes(ext)) {
+      } else if (["mp4", "webm"].includes(ext)) {
         preview.innerHTML = `<video controls src="${url}"></video>`;
       } else {
-        preview.innerHTML = `<a href="${url}" target="_blank" download>📄 Download File</a>`;
+        preview.innerHTML = `<a href="${url}" download>📄 Download File</a>`;
       }
     }
 
-    // Load file preview on page load if there's a #id
-    window.addEventListener('load', fetchFileByHash);
+    window.addEventListener("load", showFileFromHash);
   </script>
 </body>
 </html>
