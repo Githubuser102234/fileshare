@@ -51,17 +51,6 @@
       font-size: 14px;
       color: #666;
     }
-    #progressContainer {
-      margin-top: 10px;
-    }
-    #copyBtn {
-      margin-top: 10px;
-    }
-    #preview p.countdown {
-      margin-top: 5px;
-      font-size: 14px;
-      color: #333;
-    }
   </style>
 </head>
 <body>
@@ -74,20 +63,13 @@
   </select>
   <button onclick="uploadFile()">Upload & Share</button>
 
-  <!-- Upload progress bar -->
-  <div id="progressContainer" style="display:none;">
-    <progress id="uploadProgress" value="0" max="100" style="width:100%;"></progress>
-    <span id="progressPercent">0%</span>
-  </div>
-
   <div id="linkBox" style="display:none"></div>
-  <button id="copyBtn" style="display:none" onclick="copyLink()">Copy Link</button>
   <button id="deleteBtn" style="display:none" onclick="deleteFile()">Delete File</button>
   <div id="preview"></div>
 
   <script>
     const SUPABASE_URL = "https://yglfjstrkrevufhgqdwl.supabase.co";
-    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlnbGZqc3Rya3RldnVmaHdxZHdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTExNTkyNzUsImV4cCI6MjA2NjczNTI3NX0.vPSeHvWpjkWHXbyYUIHeLxPgYVSJEcQylgyi0zZBQio";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlnbGZqc3Rya3JldnVmaGdxZHdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTExNTkyNzUsImV4cCI6MjA2NjczNTI3NX0.vPSeHvWpjkWHXbyYUIHeLxPgYVSJEcQylgyi0zZBQio";
     const BUCKET = "files";
 
     const { createClient } = supabase;
@@ -98,32 +80,11 @@
       const days = parseInt(document.getElementById('expiration').value);
       if (!file) return alert("Please choose a file");
 
-      // Show progress UI
-      const progContainer = document.getElementById('progressContainer');
-      const progBar = document.getElementById('uploadProgress');
-      const progText = document.getElementById('progressPercent');
-      progBar.value = 0;
-      progText.innerText = '0%';
-      progContainer.style.display = 'block';
-
       const id = Math.random().toString(36).substring(2, 8);
       const filePath = `${id}-${file.name}`;
 
-      // Upload with progress callback
-      const { error: uploadError } = await client
-        .storage
-        .from(BUCKET)
-        .upload(filePath, file, {
-          onUploadProgress: (progressEvent) => {
-            const percent = Math.round((progressEvent.loaded / progressEvent.total) * 100);
-            progBar.value = percent;
-            progText.innerText = percent + '%';
-          }
-        });
+      const { error: uploadError } = await client.storage.from(BUCKET).upload(filePath, file);
       if (uploadError) return alert("Upload failed: " + uploadError.message);
-
-      // Hide progress or leave at 100%
-      // progContainer.style.display = 'none';
 
       const { data: publicUrlData } = client.storage.from(BUCKET).getPublicUrl(filePath);
       const publicUrl = publicUrlData.publicUrl;
@@ -137,17 +98,7 @@
       const link = `${location.origin}${location.pathname}#${id}`;
       document.getElementById('linkBox').innerHTML = `<strong>Shareable link:</strong><br><a href="${link}">${link}</a>`;
       document.getElementById('linkBox').style.display = 'block';
-      document.getElementById('copyBtn').style.display = 'block';
       document.getElementById('deleteBtn').style.display = 'block';
-    }
-
-    function copyLink() {
-      const anchor = document.querySelector('#linkBox a');
-      if (!anchor) return;
-      const link = anchor.href;
-      navigator.clipboard.writeText(link)
-        .then(() => alert("Link copied to clipboard!"))
-        .catch(() => alert("Failed to copy link."));
     }
 
     async function showFileFromHash() {
@@ -191,41 +142,13 @@
       preview.innerHTML = `
         ${contentHtml}
         <p class="expiration">Expires at: <strong>${expiresStr}</strong></p>
-        <p class="countdown">Time left: <span id="countdown"></span></p>
       `;
-
-      // Start countdown
-      startCountdown(expires);
 
       // Show delete button if uploaded in this session
       const storedPath = localStorage.getItem("uploaded_" + id);
       if (storedPath) {
         document.getElementById('deleteBtn').style.display = 'block';
       }
-    }
-
-    function startCountdown(expiryDate) {
-      const countdownEl = document.getElementById('countdown');
-      function update() {
-        const now = new Date();
-        const diff = expiryDate - now;
-        if (diff <= 0) {
-          countdownEl.innerText = 'Expired';
-          clearInterval(timer);
-          return;
-        }
-        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-        const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
-        const minutes = Math.floor((diff / (1000 * 60)) % 60);
-        const seconds = Math.floor((diff / 1000) % 60);
-        countdownEl.innerText = 
-          (days > 0 ? days + 'd ' : '') +
-          hours + 'h ' +
-          minutes + 'm ' +
-          seconds + 's';
-      }
-      update();
-      const timer = setInterval(update, 1000);
     }
 
     async function deleteFile() {
