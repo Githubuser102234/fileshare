@@ -51,6 +51,13 @@
       font-size: 14px;
       color: #666;
     }
+    /* NEW: countdown styling */
+    #preview p.countdown {
+      margin-top: 5px;
+      font-size: 14px;
+      font-weight: bold;
+      color: #333;
+    }
   </style>
 </head>
 <body>
@@ -69,7 +76,7 @@
 
   <script>
     const SUPABASE_URL = "https://yglfjstrkrevufhgqdwl.supabase.co";
-    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlnbGZqc3Rya3Rya3ZmaGdxZHdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTExNTkyNzUsImV4cCI6MjA2NjczNTI3NX0.vPSeHvWpjkWHXbyYUIHeLxPgYVSJEcQylgyi0zZBQio";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlnbGZqc3Rya3RydWZoaHFxZHdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTExNTkyNzUsImV4cCI6MjA2NjczNTI3NX0.vPSeHvWpjkWHXbyYUIHeLxPgYVSJEcQylgyi0zZBQio";
     const BUCKET = "files";
 
     const { createClient } = supabase;
@@ -139,37 +146,41 @@
         contentHtml = `<a href="${url}" download>📄 Download File</a>`;
       }
 
-      // Inject expiration and countdown
+      // Insert expiration + countdown placeholder
       preview.innerHTML = `
         ${contentHtml}
         <p class="expiration">Expires at: <strong>${expiresStr}</strong></p>
-        <p class="countdown">Time left: <span id="countdown"></span></p>
+        <p class="countdown" id="countdown"></p>
       `;
 
-      // Countdown timer
-      function updateCountdown() {
-        const now = new Date();
-        const diff = expires - now;
-        if (diff <= 0) {
-          document.getElementById('countdown').innerText = 'Expired';
-          clearInterval(timerInterval);
-          return;
-        }
-        const daysLeft = Math.floor(diff / (1000 * 60 * 60 * 24));
-        const hoursLeft = Math.floor((diff / (1000 * 60 * 60)) % 24);
-        const minsLeft = Math.floor((diff / (1000 * 60)) % 60);
-        const secsLeft = Math.floor((diff / 1000) % 60);
-        document.getElementById('countdown').innerText =
-          `${daysLeft}d ${hoursLeft}h ${minsLeft}m ${secsLeft}s`;
-      }
-      const timerInterval = setInterval(updateCountdown, 1000);
-      updateCountdown();
+      // Start the countdown
+      startCountdown(expires);
 
       // Show delete button if uploaded in this session
       const storedPath = localStorage.getItem("uploaded_" + id);
       if (storedPath) {
         document.getElementById('deleteBtn').style.display = 'block';
       }
+    }
+
+    function startCountdown(endTime) {
+      const cd = document.getElementById('countdown');
+      function update() {
+        const now = new Date();
+        const diff = endTime - now;
+        if (diff <= 0) {
+          cd.textContent = "Expired";
+          clearInterval(interval);
+          return;
+        }
+        const days = Math.floor(diff / (1000*60*60*24));
+        const hrs  = Math.floor((diff % (1000*60*60*24)) / (1000*60*60));
+        const mins = Math.floor((diff % (1000*60*60)) / (1000*60));
+        const secs = Math.floor((diff % (1000*60)) / 1000);
+        cd.textContent = `Time left: ${days}d ${hrs}h ${mins}m ${secs}s`;
+      }
+      update();
+      const interval = setInterval(update, 1000);
     }
 
     async function deleteFile() {
