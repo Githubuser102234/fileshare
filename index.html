@@ -51,7 +51,9 @@
     const SUPABASE_URL = "https://yglfjstrkrevufhgqdwl.supabase.co";
     const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlnbGZqc3Rya3JldnVmaGdxZHdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTExNTkyNzUsImV4cCI6MjA2NjczNTI3NX0.vPSeHvWpjkWHXbyYUIHeLxPgYVSJEcQylgyi0zZBQio";
     const BUCKET = "files";
-    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    const { createClient } = supabase;
+    const client = createClient(SUPABASE_URL, SUPABASE_KEY);
 
     async function uploadFile() {
       const file = document.getElementById('fileInput').files[0];
@@ -62,7 +64,7 @@
 
       console.log("Uploading:", filePath);
 
-      const { error: uploadError } = await supabase
+      const { error: uploadError } = await client
         .storage
         .from(BUCKET)
         .upload(filePath, file);
@@ -72,7 +74,7 @@
         return alert("Upload failed: " + uploadError.message);
       }
 
-      const { data: publicUrlData, error: urlError } = supabase
+      const { data: publicUrlData, error: urlError } = client
         .storage
         .from(BUCKET)
         .getPublicUrl(filePath);
@@ -85,7 +87,7 @@
         return alert("Could not get public URL.");
       }
 
-      const { error: insertError } = await supabase
+      const { error: insertError } = await client
         .from("shared_files")
         .insert([{ id, url: publicUrl }]);
 
@@ -103,7 +105,7 @@
       const id = location.hash.slice(1);
       if (!id) return;
 
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from('shared_files')
         .select('url')
         .eq('id', id)
