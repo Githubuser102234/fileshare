@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Supabase File Sharing via Hash</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+  <style>
+    body { font-family: Arial; padding: 20px; max-width: 600px; margin: auto; }
+    #linkBox { background: #eef; padding: 10px; margin-top: 10px; word-break: break-word; }
+    #preview img, video { max-width: 100%; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h2>📁 Supabase File Sharing via # Links</h2>
+
+  <input type="file" id="fileInput">
+  <button onclick="uploadFile()">Upload & Share</button>
+
+  <div id="linkBox" style="display:none;"></div>
+  <div id="preview"></div>
+
+  <script>
+    const SUPABASE_URL = "https://your-project-id.supabase.co"; // ← Replace with your project
+    const SUPABASE_KEY = "your-anon-key"; // ← Replace with your anon/public key
+    const BUCKET_NAME = "files"; // ← Your bucket name
+
+    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    async function uploadFile() {
+      const fileInput = document.getElementById('fileInput');
+      const file = fileInput.files[0];
+      if (!file) return alert("Please select a file");
+
+      const id = Math.random().toString(36).substring(2, 8);
+      const path = `${id}-${file.name}`;
+
+      const { data, error: uploadError } = await supabase.storage
+        .from(BUCKET_NAME)
+        .upload(path, file);
+
+      if (uploadError) return alert("Upload failed: " + uploadError.message);
+
+      const { data: urlData } = supabase
+        .storage
+        .from(BUCKET_NAME)
+        .getPublicUrl(path);
+
+      const fileUrl = urlData.publicUrl;
+
+      const { error: insertError } = await supabase
+        .from('shared_files')
+        .insert([{ id, url: fileUrl }]);
+
+      if (insertError) return alert("Database insert failed: " + insertError.message);
+
+      const shareLink = `${location.origin}${location.pathname}#${id}`;
+      document.getElementById('linkBox').innerText = "Share this link: " + shareLink;
+      document.getElementById('linkBox').style.display = 'block';
+    }
+
+    async function fetchFileByHash() {
+      const hash = location.hash.slice(1);
+      if (!hash) return;
+
+      const { data, error } = await supabase
+        .from('shared_files')
+        .select('url')
+        .eq('id', hash)
+        .single();
+
+      if (error || !data) {
+        document.getElementById('preview').innerText = "No file found for this link.";
+        return;
+      }
+
+      displayFile(data.url);
+    }
+
+    function displayFile(url) {
+      const ext = url.split('.').pop().toLowerCase();
+      const preview = document.getElementById('preview');
+      preview.innerHTML = "";
+
+      if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
+        preview.innerHTML = `<img src="${url}" alt="Image">`;
+      } else if (['mp4', 'webm'].includes(ext)) {
+        preview.innerHTML = `<video controls src="${url}"></video>`;
+      } else {
+        preview.innerHTML = `<a href="${url}" target="_blank" download>Download File</a>`;
+      }
+    }
+
+    window.addEventListener('load', fetchFileByHash);
+  </script>
+</body>
+</html>
